@@ -1,38 +1,35 @@
 #include <stdio.h>
+#include <cuda_runtime.h>
+#ifdef __CDT_PARSER__
+#define __global__
+#define __device__
+#define __shared__
+#endif
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <float.h>
 #include <math.h>
-#include <tuple>
-#include <iostream>
-#include <semaphore.h>
+#include <limits.h>
 #include "libarff/arff_parser.h"
 #include "libarff/arff_data.h"
-#include <bits/stdc++.h>
-
-using namespace std;
 
 __global__ void KNN(float* test, float* train, float* predictions, int k,  int n_test, int n_train, int n_classes) {
     // Implements a parallel kNN where for each candidate query an in-place priority queue is maintained to identify the kNN's.
-    float distance(float* a, float* b) {
-        float sum = 0;
-        for (int i = 0; i < n_classes - 1; i++) {
-            float diff = a[i] - b[i];
-            sum += diff * diff;
-        }
-        return sum;
-    }
-
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
     // stores k-NN candidates for a query vector as a sorted 2d array. First element is inner product, second is class.
-    float* candidates = (float*)calloc(k * 2, sizeof(float));
-    for (int i = 0; i < 2 * k; i++) {candidates[i] = FLT_MAX;}
+    float* candidates = (float*)malloc(k * 2, sizeof(float));
+    for (int i = 0; i < 2 * k; i++) {candidates[i] = 99999999.9;}
     // Stores bincounts of each class over the final set of candidate NN
-    int* classCounts = (int*)calloc(n_classes, sizeof(int));
+    int* classCounts = (int*)malloc(n_classes, sizeof(int));
 
     if (tid < n_test) {
         for (int keyIndex = 0; keyIndex < n_train; keyIndex++) {
-            float dist = distance(test[tid], train[key_Index]);
+        	float dist = 0;
+			for (int i = 0; i < n_classes - 1; i++) {
+				float diff = test[tid][i] - train[keyIndex][i];
+				dist += diff * diff;
+			};
             // Add to our candidates
             for(int c = 0; c < k; c++){
                 if(dist < candidates[2 * c]){
@@ -67,14 +64,14 @@ __global__ void KNN(float* test, float* train, float* predictions, int k,  int n
         }
 
         predictions[tid] = max_index;
-        for (int i = 0; i < 2 * k; i++) {candidates[i] = FLT_MAX;}
-        memset(classCounts, 0, n_classes * sizeof(int));
+        for (int i = 0; i < 2 * k; i++) {candidates[i] = 99999999.9;}
+        cudaMemset(classCounts, 0, n_classes * sizeof(int));
     }
 }
 
 int* computeConfusionMatrix(int* predictions, ArffData* dataset) {
     // matrix size numberClasses x numberClasses
-    int* confusionMatrix = (int*)calloc(dataset->num_classes() * dataset->num_classes(), sizeof(int));
+    int* confusionMatrix = (int*)malloc(dataset->num_classes() * dataset->num_classes(), sizeof(int));
     
     for (int i = 0; i < dataset->num_instances(); i++) {
         // for each instance compare the true class and predicted class
